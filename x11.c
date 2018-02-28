@@ -58,9 +58,8 @@ init()
 	/* create the main window */
 	win = XCreateSimpleWindow(d, root, 0, 0, Width, Height, 0, 0,
 	                          WhitePixel(d, screen));
-	swa.backing_store = WhenMapped;
 	swa.bit_gravity = NorthWestGravity;
-	XChangeWindowAttributes(d, win, CWBackingStore|CWBitGravity, &swa);
+	XChangeWindowAttributes(d, win, CWBitGravity, &swa);
 	XStoreName(d, win, "ED");
 	XSelectInput(d, win, StructureNotifyMask|ButtonPressMask|ButtonReleaseMask|Button1MotionMask|KeyPressMask|ExposureMask|FocusChangeMask);
 
