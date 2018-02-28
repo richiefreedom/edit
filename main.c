@@ -18,14 +18,17 @@
 
 W *curwin;
 int scrolling;
-int needsredraw;
 
 enum {
 	RedrawDelay = 16, /* in milliseconds */
 	DoubleClick = 600,
 };
+
+static void redraw();
+
 static struct gui *g;
 static int clicks;
+static int needsredraw;
 
 
 void
@@ -45,19 +48,6 @@ static void
 resetclicks()
 {
 	clicks = 0;
-}
-
-static void
-redraw()
-{
-	static W *old;
-
-	assert(needsredraw);
-	if (old != curwin && old)
-		old->dirty = 1;
-	win_redraw_frame(curwin, mode == 'i');
-	old = curwin;
-	needsredraw = 0;
 }
 
 void
@@ -155,6 +145,21 @@ gev(int fd, int flag, void *unused)
 			break;
 		}
 	}
+}
+
+static void
+redraw()
+{
+	static W *old;
+
+	assert(needsredraw);
+	if (old != curwin && old)
+		old->dirty = 1;
+	old = curwin;
+	needsredraw = 0;
+	win_redraw_frame(curwin, mode == 'i');
+	if (g->sync())
+		gev(0, 0, 0);
 }
 
 int

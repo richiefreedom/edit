@@ -94,7 +94,6 @@ enum {
 struct gui {
 	int (*init)(void);
 	void (*fini)(void);
-	void (*sync)(void);
 	void (*getfont)(GFont *fret);
 	void (*decorate)(GRect *clip, int dirty, GColor color);
 	void (*drawtext)(GRect *clip, Rune *str, int len,
@@ -102,6 +101,7 @@ struct gui {
 	void (*drawrect)(GRect *clip, int x, int y, int w, int h, GColor c);
 	void (*drawcursor)(GRect *clip, int insert, int x, int y, int w);
 	void (*setpointer)(GPointer pt);
+	int (*sync)(void);
 	int (*textwidth)(Rune *str, int len);
 	int (*nextevent)(GEvent *eret);
 	int hmargin;

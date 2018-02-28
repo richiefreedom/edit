@@ -208,11 +208,11 @@ textwidth(Rune *str, int len)
 	return gi.xOff;
 }
 
-static void
+static int
 sync()
 {
 	XCopyArea(d, pbuf, win, gc, 0, 0, w, h, 0, 0);
-	XFlush(d);
+	return XPending(d); // calls XFlush()
 }
 
 static int

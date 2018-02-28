@@ -294,7 +294,6 @@ win_redraw_frame(W *focus, int insert)
 		g->drawrect(&b, 0, 0, b.w, g->border, GGray);
 		draw(&tag.win, GPaleGreen, focus, insert);
 	}
-	g->sync();
 }
 
 /* win_scroll - Scroll the window by [n] lines.
