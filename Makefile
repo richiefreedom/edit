@@ -1,3 +1,5 @@
+#CONFIG_SDL = y
+
 LD     := $(CC)
 TANGLE := ctangle
 
@@ -8,6 +10,14 @@ LDFLAGS += $$(pkg-config --libs x11 xft)
 CFLAGS  += -g --std=c99 -Wall -Wextra -I. $$(pkg-config --cflags x11 xft)
 
 SRCFILES := unicode.c evnt.c x11.c buf.c edit.c win.c exec.c vicmd.w main.c
+
+ifeq ($(CONFIG_SDL),y)
+FONT_FILE = $(shell scripts/fontfinder.sh)
+LDFLAGS += $$(sdl2-config --libs) -lSDL2_ttf
+CFLAGS += $$(sdl2-config --cflags) -DCONFIG_SDL -DFONT_FILE=\"$(FONT_FILE)\"
+SRCFILES += sdl.c
+endif
+
 OBJFILES := $(patsubst %.w, $(OBJDIR)/%.o, $(SRCFILES:%.c=$(OBJDIR)/%.o))
 
 all: $(OBJDIR)/edit

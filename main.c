@@ -30,7 +30,6 @@ static struct gui *g;
 static int clicks;
 static int needsredraw;
 
-
 void
 chwin(W *w)
 {
@@ -168,7 +167,11 @@ main(int ac, char *av[])
 	int guifd;
 
 	signal(SIGPIPE, SIG_IGN);
+#ifdef CONFIG_SDL
+	g = &gui_sdl;
+#else
 	g = &gui_x11;
+#endif
 	guifd = g->init();
 	ev_register(guifd, ERead, gev, 0);
 	win_init(g);
