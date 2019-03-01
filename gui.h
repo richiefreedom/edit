@@ -112,3 +112,4 @@ struct gui {
 
 /* Available gui modules */
 extern struct gui gui_x11;
+extern struct gui gui_sdl;
