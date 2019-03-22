@@ -19,7 +19,9 @@
 
 void die(char *);
 
+#ifndef FONT_FILE
 #define FONT_FILE "default.ttf"
+#endif
 #define FONT_SIZE 18
 
 enum {
