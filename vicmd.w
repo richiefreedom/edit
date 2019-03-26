@@ -18,6 +18,7 @@ then executed on the currently focused window.  We try to follow the
 
 @c
 @<Header files to include@>@/
+@<Helpful macros@>@/
 @<External variables and functions@>@/
 @<Local types@>@/
 @<Predeclared functions@>@/
@@ -42,6 +43,14 @@ purposes we also include \.{stdio.h}.
 #include "win.h"
 #include "exec.h"
 #include "cmd.h"
+
+@ To make happy modern versions of GCC we have to use some macro
+or attribute to mark unused variables, for example in m\_match()
+and yank(). Otherwise it will yell with annoying warnings.
+
+@<Helpful macros@>=
+#define UNUSED(__var) \
+	(void) (__var)
 
 @ The \.{vi} editor is modal so we must keep track of the current
 mode we are currently into.  When the editor starts it is in
@@ -735,6 +744,7 @@ static int m_match(int ismotion, Cmd c, Motion *m)
 	int n, dp, N = sizeof match / sizeof match[0];
 	unsigned p = m->beg;
 	Rune beg, end, r;
+	UNUSED(c);
 
 	@<Find the search direction and the matching character@>;
 	for (
@@ -950,6 +960,7 @@ static void yankspan(Motion *m, YBuf *y)
 
 static int yank(Motion *m, char buf, unsigned count, Cmd mc)
 {
+	UNUSED(buf);
 	mc.count *= count;
 
 	*m = (Motion){curwin->cu,0,0};
