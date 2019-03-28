@@ -164,7 +164,7 @@ static GSdlContextHandle GSdlContextNew(int width, int height, int border,
             die("cannot create window");
 
         cont->pRenderer = SDL_CreateRenderer(cont->pWindow, -1,
-                                             SDL_RENDERER_ACCELERATED);
+                                             SDL_RENDERER_SOFTWARE);
         if (!cont->pRenderer)
             die("cannot create renderer");
 
