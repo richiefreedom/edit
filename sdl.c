@@ -124,9 +124,11 @@ static int GEventChanPut(GEventChanHandle chan, GEvent *pEvent)
 struct GSdlContext {
     SDL_Window      *pWindow;
     SDL_Renderer    *pRenderer;
+    SDL_Texture     *pOffTexture;
     TTF_Font        *pFont;
     SDL_Thread      *pThread;
     GEventChanHandle chan;
+    SDL_mutex       *pMutex;
 
     int width;
     int height;
@@ -168,6 +170,15 @@ static GSdlContextHandle GSdlContextNew(int width, int height, int border,
         if (!cont->pRenderer)
             die("cannot create renderer");
 
+        cont->pOffTexture = SDL_CreateTexture(cont->pRenderer,
+                                              SDL_PIXELFORMAT_RGBA8888,
+                                              SDL_TEXTUREACCESS_TARGET,
+                                              width, height);
+        if (!cont->pOffTexture)
+            die("cannot create offscreen texture");
+
+        SDL_SetRenderTarget(cont->pRenderer, cont->pOffTexture);
+
         cont->pFont = TTF_OpenFont(font, fontSize);
         if (!cont->pFont)
             die("cannot load font file");
@@ -175,6 +186,10 @@ static GSdlContextHandle GSdlContextNew(int width, int height, int border,
         cont->chan = GEventChanNew();
         if (!cont->chan)
             die("cannot create event chan");
+
+        cont->pMutex = SDL_CreateMutex();
+        if (!cont->pMutex)
+            die("cannot create mutex");
 
         SDL_StartTextInput();
 
@@ -200,10 +215,14 @@ static void GSdlContextKill(GSdlContextHandle cont)
 
         SDL_StopTextInput();
 
+        if (cont->pMutex)
+            SDL_DestroyMutex(cont->pMutex);
         if (cont->chan)
             GEventChanKill(cont->chan);
         if (cont->pFont)
             TTF_CloseFont(cont->pFont);
+        if (cont->pOffTexture)
+            SDL_DestroyTexture(cont->pOffTexture);
         if (cont->pRenderer)
             SDL_DestroyRenderer(cont->pRenderer);
         if (cont->pWindow)
@@ -242,11 +261,29 @@ static void HandleInput(GSdlContextHandle cont)
                 break;
 
             case SDL_WINDOWEVENT:
-                gev.type = GResize;
-                gev.resize.width = event.window.data1;
-                gev.resize.height = event.window.data2;
+                switch (event.window.event) {
+                    case SDL_WINDOWEVENT_EXPOSED:
+                        SDL_LockMutex(cont->pMutex);
+                        SDL_SetRenderTarget(cont->pRenderer, NULL);
 
-                GEventChanPut(cont->chan, &gev);
+                        SDL_RenderCopy(cont->pRenderer,
+                                       cont->pOffTexture, 0, 0);
+
+                        SDL_RenderPresent(cont->pRenderer);
+
+                        SDL_SetRenderTarget(cont->pRenderer,
+                                            cont->pOffTexture);
+                        SDL_UnlockMutex(cont->pMutex);
+                        break;
+                    case SDL_WINDOWEVENT_SHOWN:
+                    default:
+                        gev.type = GResize;
+                        gev.resize.width = Width;
+                        gev.resize.height = Height;
+
+                        GEventChanPut(cont->chan, &gev);
+                        break;
+                }
                 break;
 
             case SDL_MOUSEBUTTONUP:
@@ -454,6 +491,7 @@ static void GSdlDrawRect(GRect *clip, int x, int y, int w, int h, GColor c)
 
     assert(globalContext);
     assert(globalContext->pRenderer);
+    assert(globalContext->pMutex);
 
 	if (x + w > clip->w)
 		w = clip->w - x;
@@ -468,12 +506,16 @@ static void GSdlDrawRect(GRect *clip, int x, int y, int w, int h, GColor c)
     rect.w = w;
     rect.h = h;
 
+    SDL_LockMutex(globalContext->pMutex);
+
     SDL_SetRenderDrawColor(globalContext->pRenderer,
                            c.red, c.green, c.blue, 255);
     if (c.x)
         SDL_RenderDrawRect(globalContext->pRenderer, &rect);
     else
         SDL_RenderFillRect(globalContext->pRenderer, &rect);
+
+    SDL_UnlockMutex(globalContext->pMutex);
 }
 
 static void GSdlDrawCursor(GRect *clip, int insert, int x, int y, int w)
@@ -538,6 +580,7 @@ static void GSdlDrawText(GRect *clip, Rune *str,
     assert(globalContext);
     assert(globalContext->pFont);
     assert(globalContext->pRenderer);
+    assert(globalContext->pMutex);
     assert(text);
 
     if (text) {
@@ -558,6 +601,8 @@ static void GSdlDrawText(GRect *clip, Rune *str,
             assert(pSurface);
 
             if (pSurface) {
+                SDL_LockMutex(globalContext->pMutex);
+
                 pTexture = SDL_CreateTextureFromSurface(
                                 globalContext->pRenderer,
                                 pSurface
@@ -577,6 +622,7 @@ static void GSdlDrawText(GRect *clip, Rune *str,
                     SDL_DestroyTexture(pTexture);
                 }
 
+                SDL_UnlockMutex(globalContext->pMutex);
                 SDL_FreeSurface(pSurface);
             }
         }
@@ -605,10 +651,12 @@ static int GSdlNextEvent(GEvent *ev)
 
 static int GSdlSync(void)
 {
-    assert(globalContext);
-    assert(globalContext->pRenderer);
+    SDL_Event event;
 
-    SDL_RenderPresent(globalContext->pRenderer);
+    event.type = SDL_WINDOWEVENT;
+    event.window.event = SDL_WINDOWEVENT_EXPOSED;
+
+    SDL_PushEvent(&event);
 
     return 0;
 }
