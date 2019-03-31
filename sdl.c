@@ -24,6 +24,11 @@ void die(char *);
 #endif
 #define FONT_SIZE 18
 
+#define SURFACE32_LE_RMASK (0x000000FF)
+#define SURFACE32_LE_GMASK (0x0000FF00)
+#define SURFACE32_LE_BMASK (0x00FF0000)
+#define SURFACE32_LE_AMASK (0xFF000000)
+
 enum {
 	HMargin = 16,
 	VMargin = 2,
@@ -124,7 +129,7 @@ static int GEventChanPut(GEventChanHandle chan, GEvent *pEvent)
 struct GSdlContext {
     SDL_Window      *pWindow;
     SDL_Renderer    *pRenderer;
-    SDL_Texture     *pOffTexture;
+    SDL_Surface     *pSurface;
     TTF_Font        *pFont;
     SDL_Thread      *pThread;
     GEventChanHandle chan;
@@ -165,19 +170,20 @@ static GSdlContextHandle GSdlContextNew(int width, int height, int border,
         if (!cont->pWindow)
             die("cannot create window");
 
+        SDL_SetWindowResizable(cont->pWindow, SDL_TRUE);
+
         cont->pRenderer = SDL_CreateRenderer(cont->pWindow, -1,
                                              SDL_RENDERER_SOFTWARE);
         if (!cont->pRenderer)
             die("cannot create renderer");
 
-        cont->pOffTexture = SDL_CreateTexture(cont->pRenderer,
-                                              SDL_PIXELFORMAT_RGBA8888,
-                                              SDL_TEXTUREACCESS_TARGET,
-                                              width, height);
-        if (!cont->pOffTexture)
-            die("cannot create offscreen texture");
-
-        SDL_SetRenderTarget(cont->pRenderer, cont->pOffTexture);
+        cont->pSurface = SDL_CreateRGBSurface(0, width, height, 32,
+                                              SURFACE32_LE_RMASK,
+                                              SURFACE32_LE_GMASK,
+                                              SURFACE32_LE_BMASK,
+                                              SURFACE32_LE_AMASK);
+        if (!cont->pSurface)
+            die("cannot create offscreen surface");
 
         cont->pFont = TTF_OpenFont(font, fontSize);
         if (!cont->pFont)
@@ -221,8 +227,8 @@ static void GSdlContextKill(GSdlContextHandle cont)
             GEventChanKill(cont->chan);
         if (cont->pFont)
             TTF_CloseFont(cont->pFont);
-        if (cont->pOffTexture)
-            SDL_DestroyTexture(cont->pOffTexture);
+        if (cont->pSurface)
+            SDL_FreeSurface(cont->pSurface);
         if (cont->pRenderer)
             SDL_DestroyRenderer(cont->pRenderer);
         if (cont->pWindow)
@@ -230,6 +236,30 @@ static void GSdlContextKill(GSdlContextHandle cont)
 
         free(cont);
     }
+}
+
+static int GSdlResizeSurface(GSdlContextHandle cont)
+{
+    assert(cont);
+    assert(cont->pSurface);
+
+    int rc = -1;
+
+    if (cont && cont->pSurface) {
+        SDL_FreeSurface(cont->pSurface);
+        cont->pSurface = SDL_CreateRGBSurface(0,
+                                              cont->width,
+                                              cont->height,
+                                              32,
+                                              SURFACE32_LE_RMASK,
+                                              SURFACE32_LE_GMASK,
+                                              SURFACE32_LE_BMASK,
+                                              SURFACE32_LE_AMASK);
+        if (cont->pSurface)
+            rc = 0;
+    }
+
+    return rc;
 }
 
 static void HandleInput(GSdlContextHandle cont)
@@ -262,21 +292,65 @@ static void HandleInput(GSdlContextHandle cont)
 
             case SDL_WINDOWEVENT:
                 switch (event.window.event) {
+                    SDL_Texture *pTexture;
+
                     case SDL_WINDOWEVENT_EXPOSED:
                         SDL_LockMutex(cont->pMutex);
-                        SDL_SetRenderTarget(cont->pRenderer, NULL);
 
-                        SDL_RenderCopy(cont->pRenderer,
-                                       cont->pOffTexture, 0, 0);
+                        /*
+                         * TODO: Do not allocate the texture on
+                         * every EXPOSED event. Allocate the
+                         * texture when renderer is created,
+                         * then reallocate it only on the window
+                         * resize event.
+                         */
+                        pTexture = SDL_CreateTextureFromSurface(
+                                       globalContext->pRenderer,
+                                       globalContext->pSurface
+                                   );
+
+                        assert(pTexture);
+
+                        if (pTexture) {
+                            /*
+                             * TODO: One more point for optimization.
+                             * Here we copy the whole texture to the
+                             * window's surface. Instead we can maintain
+                             * information about damaged areas of the
+                             * window and update only these areas.
+                             */
+                            SDL_RenderCopy(globalContext->pRenderer,
+                                           pTexture, 0, 0);
+
+                            SDL_DestroyTexture(pTexture);
+                        }
 
                         SDL_RenderPresent(cont->pRenderer);
 
-                        SDL_SetRenderTarget(cont->pRenderer,
-                                            cont->pOffTexture);
                         SDL_UnlockMutex(cont->pMutex);
                         break;
+                    case SDL_WINDOWEVENT_RESIZED:
+                        SDL_LockMutex(cont->pMutex);
+
+                        cont->width = event.window.data1;
+                        cont->height = event.window.data2;
+
+                        SDL_SetWindowSize(cont->pWindow,
+                                          cont->width,
+                                          cont->height);
+
+                        /* TODO: Check runtime errors properly. */
+                        GSdlResizeSurface(cont);
+
+                        SDL_UnlockMutex(cont->pMutex);
+
+                        gev.type = GResize;
+                        gev.resize.width = cont->width;
+                        gev.resize.height = cont->height;
+
+                        GEventChanPut(cont->chan, &gev);
+                        break;
                     case SDL_WINDOWEVENT_SHOWN:
-                    default:
                         gev.type = GResize;
                         gev.resize.width = Width;
                         gev.resize.height = Height;
@@ -508,12 +582,20 @@ static void GSdlDrawRect(GRect *clip, int x, int y, int w, int h, GColor c)
 
     SDL_LockMutex(globalContext->pMutex);
 
-    SDL_SetRenderDrawColor(globalContext->pRenderer,
-                           c.red, c.green, c.blue, 255);
+    assert(globalContext->pSurface);
+
     if (c.x)
-        SDL_RenderDrawRect(globalContext->pRenderer, &rect);
+        SDL_FillRect(globalContext->pSurface, &rect,
+                     SDL_MapRGBA(
+                        globalContext->pSurface->format,
+                        c.red, c.green, c.blue, 0x50
+                     ));
     else
-        SDL_RenderFillRect(globalContext->pRenderer, &rect);
+        SDL_FillRect(globalContext->pSurface, &rect,
+                     SDL_MapRGB(
+                         globalContext->pSurface->format,
+                         c.red, c.green, c.blue
+                     ));
 
     SDL_UnlockMutex(globalContext->pMutex);
 }
@@ -571,8 +653,6 @@ static void GSdlDrawText(GRect *clip, Rune *str,
 {
     SDL_Color    color = { c.red, c.green, c.blue, 255 };
     SDL_Surface *pSurface;
-    SDL_Texture *pTexture;
-    SDL_Rect     quad;
 
     uint16_t *text = calloc(len + 1, sizeof(*text));
     int i;
@@ -602,26 +682,28 @@ static void GSdlDrawText(GRect *clip, Rune *str,
 
             if (pSurface) {
                 SDL_LockMutex(globalContext->pMutex);
+                {
+                    SDL_Rect sourceRect = {
+                        .x = 0,
+                        .y = 0,
+                        .w = pSurface->w,
+                        .h = pSurface->h,
+                    };
 
-                pTexture = SDL_CreateTextureFromSurface(
-                                globalContext->pRenderer,
-                                pSurface
-                           );
+                    SDL_Rect destRect = {
+                        .x = x,
+                        .y = y,
+                        .w = pSurface->w,
+                        .h = pSurface->h,
+                    };
 
-                assert(pTexture);
-
-                if (pTexture) {
-                    quad.x = x;
-                    quad.y = y;
-                    quad.w = pSurface->w;
-                    quad.h = pSurface->h;
-
-                    SDL_RenderCopy(globalContext->pRenderer, pTexture,
-                                   NULL, &quad);
-
-                    SDL_DestroyTexture(pTexture);
+                    int rc = SDL_BlitSurface(pSurface,
+                                             &sourceRect,
+                                             globalContext->pSurface,
+                                             &destRect);
+                    if (0 != rc)
+                        die("cannot blit surface");
                 }
-
                 SDL_UnlockMutex(globalContext->pMutex);
                 SDL_FreeSurface(pSurface);
             }
