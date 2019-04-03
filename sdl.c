@@ -559,6 +559,46 @@ static void GSdlDeinit(void)
     }
 }
 
+static Uint32 getPixel32(SDL_Surface *pSurface, int x, int y)
+{
+    Uint32 *pixels = (Uint32 *)pSurface->pixels;
+    return pixels[y * pSurface->w + x];
+}
+
+static void setPixel32(SDL_Surface *pSurface, int x, int y,
+                       Uint32 color)
+{
+    Uint32 *pixels = (Uint32 *)pSurface->pixels;
+    pixels[y * pSurface->w + x] = color;
+}
+
+static void GSdlInvertRect(int x, int y, int w, int h)
+{
+    int i, j;
+
+    SDL_LockSurface(globalContext->pSurface);
+
+    for (j = y; j < y + h; ++j) {
+        for (i = x; i < x + w; ++i) {
+            Uint8  or, og, ob;
+            Uint32 ocolor;
+            Uint32 ncolor;
+
+            ocolor = getPixel32(globalContext->pSurface, i, j);
+            SDL_GetRGB(ocolor, globalContext->pSurface->format, &or, &og, &ob);
+
+            ncolor = SDL_MapRGB(
+                         globalContext->pSurface->format,
+                         255 - or, 255 - og, 255 - ob
+                     );
+
+            setPixel32(globalContext->pSurface, i, j, ncolor);
+        }
+    }
+
+    SDL_UnlockSurface(globalContext->pSurface);
+}
+
 static void GSdlDrawRect(GRect *clip, int x, int y, int w, int h, GColor c)
 {
 	SDL_Rect rect;
@@ -584,13 +624,9 @@ static void GSdlDrawRect(GRect *clip, int x, int y, int w, int h, GColor c)
 
     assert(globalContext->pSurface);
 
-    if (c.x)
-        SDL_FillRect(globalContext->pSurface, &rect,
-                     SDL_MapRGBA(
-                        globalContext->pSurface->format,
-                        c.red, c.green, c.blue, 0x50
-                     ));
-    else
+    if (c.x) {
+        GSdlInvertRect(x, y, w, h);
+    } else
         SDL_FillRect(globalContext->pSurface, &rect,
                      SDL_MapRGB(
                          globalContext->pSurface->format,
