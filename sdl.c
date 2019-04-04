@@ -361,8 +361,12 @@ static void HandleInput(GSdlContextHandle cont)
                 break;
 
             case SDL_MOUSEBUTTONUP:
+                gev.type = GMouseUp;
+
                 if (SDL_BUTTON_LEFT == event.button.button)
                     cont->move = 0;
+
+                GEventChanPut(cont->chan, &gev);
                 break;
 
             case SDL_MOUSEBUTTONDOWN:
