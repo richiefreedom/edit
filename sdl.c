@@ -369,8 +369,8 @@ static void HandleInput(GSdlContextHandle cont)
                         break;
                     case SDL_WINDOWEVENT_SHOWN:
                         gev.type = GResize;
-                        gev.resize.width = Width;
-                        gev.resize.height = Height;
+                        gev.resize.width = cont->width;
+                        gev.resize.height = cont->height;
 
                         GEventChanPut(cont->chan, &gev);
                         break;
