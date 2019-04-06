@@ -777,13 +777,8 @@ static int GSdlNextEvent(GEvent *ev)
     assert(globalContext->chan);
 
     er = GEventChanGet(globalContext->chan, ev);
-    if (0 == er) {
-        if (ev->type == GResize && (!ev->resize.width || !ev->resize.height)) {
-            ev->resize.width = Width;
-            ev->resize.height = Height;
-        }
+    if (0 == er)
         rc = 1;
-    }
 
     return rc;
 }
