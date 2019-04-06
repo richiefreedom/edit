@@ -134,6 +134,7 @@ struct GSdlContext {
     SDL_Thread      *pThread;
     GEventChanHandle chan;
     SDL_mutex       *pMutex;
+    SDL_Cursor      *pCursors[2];
 
     int width;
     int height;
@@ -193,6 +194,18 @@ static GSdlContextHandle GSdlContextNew(int width, int height, int border,
         if (!cont->chan)
             die("cannot create event chan");
 
+        assert(GPNormal < 2);
+        assert(GPResize < 2);
+
+        cont->pCursors[GPNormal] =
+            SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_ARROW);
+        cont->pCursors[GPResize] =
+            SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_HAND);
+
+        if (!cont->pCursors[GPNormal] ||
+            !cont->pCursors[GPResize])
+            die("cannot create cursors");
+
         cont->pMutex = SDL_CreateMutex();
         if (!cont->pMutex)
             die("cannot create mutex");
@@ -223,6 +236,10 @@ static void GSdlContextKill(GSdlContextHandle cont)
 
         if (cont->pMutex)
             SDL_DestroyMutex(cont->pMutex);
+        if (cont->pCursors[GPNormal])
+            SDL_FreeCursor(cont->pCursors[GPNormal]);
+        if (cont->pCursors[GPResize])
+            SDL_FreeCursor(cont->pCursors[GPResize]);
         if (cont->chan)
             GEventChanKill(cont->chan);
         if (cont->pFont)
@@ -785,8 +802,11 @@ static int GSdlSync(void)
 
 static void GSdlSetPointer(GPointer pt)
 {
-    /* TODO: implement mouse pointers. */
-    (void)pt;
+    assert(globalContext);
+    assert(GPNormal == pt || GPResize == pt);
+    assert(globalContext->pCursors[pt]);
+
+    SDL_SetCursor(globalContext->pCursors[pt]);
 }
 
 static void GSdlDecorate(GRect *clip, int dirty, GColor c)
