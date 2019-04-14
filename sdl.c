@@ -680,25 +680,51 @@ static void GSdlGetFont(GFont *ret)
     ret->height  = TTF_FontHeight(globalContext->pFont);
 }
 
-static int GSdlTextWidth(Rune *str, int len)
+/*
+ * NOTE: allocates a new Unicode16 string and returns it to the
+ * requester.
+ */
+static uint16_t *RunesToUnicode16(Rune *str, int len)
 {
     uint16_t *text = calloc(len + 1, sizeof(*text));
-    int i, rc, w = 0, h;
+    assert(text);
+
+    if (text) {
+        int i;
+        for (i = 0; i < len; ++i)
+            text[i] = (uint16_t)str[i];
+
+        text[len] = 0;
+    }
+
+    return text;
+}
+
+static int Unicode16TextWidth(uint16_t *text, int len)
+{
+    int rc, w = 0, h;
 
     assert(globalContext);
     assert(globalContext->pFont);
     assert(text);
 
-    if (text) {
-        /* Convert normal unicode runes to the short ones. */
-        for (i = 0; i < len; ++i)
-            text[i] = (uint16_t)str[i];
-
-        text[len] = 0;
-
+    if (text && len) {
         rc = TTF_SizeUNICODE(globalContext->pFont, text, &w, &h);
         assert(0 == rc);
+    }
 
+    return w;
+}
+
+static int GSdlTextWidth(Rune *str, int len)
+{
+    uint16_t *text = RunesToUnicode16(str, len);
+    int w = 0;
+
+    assert(text);
+
+    if (text) {
+        w = Unicode16TextWidth(text, len);
         free(text);
     }
 
@@ -711,8 +737,7 @@ static void GSdlDrawText(GRect *clip, Rune *str,
     SDL_Color    color = { c.red, c.green, c.blue, 255 };
     SDL_Surface *pSurface;
 
-    uint16_t *text = calloc(len + 1, sizeof(*text));
-    int i;
+    uint16_t *text = RunesToUnicode16(str, len);
 
     assert(globalContext);
     assert(globalContext->pFont);
@@ -721,18 +746,11 @@ static void GSdlDrawText(GRect *clip, Rune *str,
     assert(text);
 
     if (text) {
-        /* Convert normal unicode runes to the short ones. */
-        for (i = 0; i < len; ++i)
-            text[i] = (uint16_t)str[i];
-
-        text[len] = 0;
-
         x += clip->x;
         y += clip->y;
         y -= TTF_FontAscent(globalContext->pFont);
 
-        /* TODO: do not convert the text twice. */
-        if (0 != GSdlTextWidth(str, len)) {
+        if (0 != Unicode16TextWidth(text, len)) {
             pSurface = TTF_RenderUNICODE_Blended(globalContext->pFont,
                                                  text, color);
             assert(pSurface);
