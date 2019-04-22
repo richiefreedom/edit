@@ -7,7 +7,7 @@ V = @
 OBJDIR := obj
 
 LDFLAGS += $$(pkg-config --libs x11 xft)
-CFLAGS  += -g3 --std=c99 -Wall -Wextra -I. $$(pkg-config --cflags x11 xft)
+CFLAGS  += -g --std=c99 -Wall -Wextra -I. $$(pkg-config --cflags x11 xft)
 
 SRCFILES := unicode.c evnt.c x11.c buf.c edit.c win.c exec.c vicmd.w main.c
 
