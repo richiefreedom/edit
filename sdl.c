@@ -628,13 +628,13 @@ static void GSdlDrawRect(GRect *clip, int x, int y, int w, int h, GColor c)
     assert(globalContext->pRenderer);
     assert(globalContext->pMutex);
 
-	if (x + w > clip->w)
-		w = clip->w - x;
-	if (y + h > clip->h)
-		h = clip->h - y;
+    if (x + w > clip->w)
+        w = clip->w - x;
+    if (y + h > clip->h)
+        h = clip->h - y;
 
-	x += clip->x;
-	y += clip->y;
+    x += clip->x;
+    y += clip->y;
 
     rect.x = x;
     rect.y = y;
